@@ -8,14 +8,12 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <math.h>
 #include <float.h>
 #include <pthread.h>
 
-#define SHMNAME "/my_shm"
-#define SEMNAME "/my_sem"
-#define TRUE 1
 #define TIME_PERIOD 5
 #define SIZE 1
 #define ENV_SIZE 10
@@ -28,128 +26,50 @@ pthread_t reader_t3;
 typedef struct environment
 {
      sem_t mutex;
+     int rflags;
      int size;
      char *data;
 } Environment;
 
 // environment struct
-Environment env1;
-Environment env2;
+Environment *env1;
+Environment *env2;
+Environment *env3;
 
 int N = 0;
 int nbytes;
 void init();
 void join();
+void clean();
+
 void *collect1();
 void *collect2();
 void *reader1();
 void *reader2();
 void *reader3();
+
 void checkresult(int result, char *text);
-void timer_expired(int called_via_signal);
+void checkFlags(Environment *env);
 
 void junkData(Environment *env);
+
+Environment *createEnv(size_t size);
+void destroyEnv(Environment *env);
 
 int main()
 {
      init();
-     // init fake environments
-     bzero(&env1, sizeof(Environment));
-     if (sem_init(&env1.mutex, 1, 1) == -1)
-     {
-          printf("Sem init ERROR = %i.\n", errno);
-          exit(1);
-     }
-     env1.size = ENV_SIZE;
-     env1.data = calloc(ENV_SIZE, sizeof(char));
-
-     bzero(&env2, sizeof(Environment));
-     if (sem_init(&env2.mutex, 1, 1) == -1)
-     {
-          printf("Sem init ERROR = %i.\n", errno);
-          exit(1);
-     }
-     env2.size = ENV_SIZE;
-     env2.data = calloc(ENV_SIZE, sizeof(char));
-
-     // extern void timer_expired();
-     int i, d, nbytes, cps;
-     char *addr;
-
-     nbytes = sizeof(env1);
-
-     // Create shared memory region.
-     if ((d = shm_open(SHMNAME, O_RDWR|O_CREAT|O_EXCL, 0666)) == -1) {
-          printf("Unable to open shared memory.\n");
-          exit(1);
-     }
-
-     if (ftruncate(d, nbytes) != 0) {
-          close(d);
-          shm_unlink(SHMNAME);
-          printf("Unable to truncate.\n");
-          exit(1);
-     }
-     p = (struct phu *)mmap(NULL, nbytes, PROT_READ|PROT_WRITE, MAP_SHARED, d, 0);
-
-     if(p == (struct phu *) -1) {
-          close(d);
-          printf("Unable to mmap.\n"); 
-          exit(1);
-     }
-
-     shm_unlink(SHMNAME);
-
-     // Create semaphore.
-     if (sem_init(&p->s, 1, 1) == -1)
-     {
-          printf("Sema init ERROR = %i.\n", errno);
-          exit(1);
-     }
-
-     // Begin test - repeatedly acquire mutual exclusion, write to area and
-     // release mutual exclusion.
-
-     addr = p->beginning_of_data;
-     N = 0;
-
-     //alarm(TIME_PERIOD);
-
-     // todo remove me
-     while (TRUE)
-     {
-
-          // Acquire parents lock.
-          if (sem_wait(&p->s) == -1)
-          {
-               printf("Sem_wait error.\n");
-          }
-
-          // Store data in shared memory.
-          for (i = 0; i < SIZE; i++)
-          {
-               addr[i] = 'A';
-               //               printf("i = %d. N = %d.\n", i, N);
-               // Uncomment this line to debug
-          }
-
-          // Release parents lock.
-          if (sem_post(&p->s) == -1)
-          {
-               printf("Sem_post error.\n");
-          }
-
-          N++;
-     }
-
-     // deallocate our "Environments"
-     free(env1.data);
-     free(env2.data);
-
+     join();
+     clean();
 }
 
 void init()
 {
+     // Create environments
+     env1 = createEnv(ENV_SIZE);
+     env2 = createEnv(ENV_SIZE);
+     env3 = createEnv(ENV_SIZE);
+
      int result;
      // Collect1
      result = pthread_create(&collect_t1, NULL, collect1, NULL);
@@ -172,7 +92,8 @@ void init()
      checkresult(result, "Thread create failed");
 }
 
-void join(){
+void join()
+{
      int result;
      result = pthread_join(collect_t1, NULL);
      checkresult(result, "Thread join failed");
@@ -183,29 +104,25 @@ void join(){
      result = pthread_join(reader_t2, NULL);
      checkresult(result, "Thread join failed");
      result = pthread_join(reader_t3, NULL);
-     checkresult(result, "Thread join failed");          
+     checkresult(result, "Thread join failed");
 }
 
-
-
-void timer_expired(int called_via_signal)
-{
-     printf("%d iterations in %i seconds\n", N, TIME_PERIOD);
-     exit(0);
+void clean(){
+     destroyEnv(env1);
+     destroyEnv(env2);
+     destroyEnv(env3);
 }
 
 void *collect1()
-{    
-     int fd;
+{
      while (1)
      {
-          // TODO semaphores
-          junkData(&env1);
-          fd = shm_open("SHMNAME",O_RDONLY, S_IREAD);   
-	     if (fd == -1) {
-		     printf("Error opening the shared memory object: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	     }                           
+          if(checkflags(env1))
+          {
+                   // TODO semaphores
+                   junkData(env1);
+          }
+          // TODO something with env1->data
      }
 }
 
@@ -213,21 +130,49 @@ void *collect2()
 {
      while (1)
      {
-          // TODO semaphores
-          junkData(&env2);
+          if(checkflags(env2))
+          {
+                   if(sem_wait(&env->mutex) == -1){
+                        exit(-1);
+                   };
+                   junkData(env1);
+          }
+          // TODO something with env2->data
      }
 }
 
 void *reader1()
 {
+     char val;
+     while (1)
+     {
+          if()
+          {          
+          val = env1->data;          
+          printf("Reader1: %s\n", val);
+          env1->
+          }
+     }
 }
 
 void *reader2()
 {
+     char val;
+     while (1)
+     {
+          val =env2->data;
+          val = tolower(val);
+          printf("Reader2: %s\n",val);
+     }
 }
 
 void *reader3()
 {
+     char data;
+     while (1)
+     {
+          //TODO receive/retrieve data through IPC
+     }
 }
 
 void checkresult(int result, char *text)
@@ -245,5 +190,36 @@ void junkData(Environment *env)
      for (i = 0; i < env->size; i++)
      {
           env->data[i] = 'A' + (random() % 26);
+     }
+}
+
+int checkFlags(Environment * env){
+     return env->rflags; 
+}
+
+Environment *createEnv(size_t size)
+{
+     Environment *env = calloc(1, sizeof(Environment));
+
+     if (sem_init(&env->mutex, 1, 1) == -1)
+     {
+          printf("Sem init ERROR = %i.\n", errno);
+          exit(1);
+     }
+     env->size = size;
+     env->data = malloc(sizeof(char) * size);
+
+     return env;
+}
+
+void destroyEnv(Environment *env)
+{
+     if (env)
+     {
+          if (env->data)
+          {
+               free(env->data);
+          }
+          free(data);
      }
 }
