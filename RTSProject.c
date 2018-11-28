@@ -26,7 +26,7 @@ pthread_t reader_t3;
 typedef struct environment
 {
      sem_t mutex;
-     int rflags[3];
+     int rflag;
      int size;
      char *data;
 } Environment;
@@ -50,7 +50,7 @@ void *reader3();
 
 void checkresult(int result, char *text);
 void checkFlags(Environment *env);
-
+void lower(Environment *env);
 void junkData(Environment *env);
 
 Environment *createEnv(size_t size);
@@ -118,12 +118,42 @@ void *collect1()
 {
      while (1)
      {
-          if (checkflags(env1))
+          if (checkFlags(env1))
           {
-               // TODO semaphores
+               if (sem_wait(&env1->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+               // collect the junk data
                junkData(env1);
+
+               // set the flag
+               env1->rflag = 0;
+
+               if (sem_post(&env1->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
           }
-          // TODO something with env1->data
+          if (checkFlags(env3))
+          {
+               if (sem_wait(&env3->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+
+               // fill the first half with As
+               int i = 0;
+               for (i; i < env3->size / 2; i++)
+               {
+                    env3->data[i] = 'A';
+               }
+
+               if (sem_post(&env3->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+          }
      }
 }
 
@@ -131,7 +161,7 @@ void *collect2()
 {
      while (1)
      {
-          if (checkflags(env2))
+          if (checkFlags(env2))
           {
                if (sem_wait(&env2->mutex) == -1)
                {
@@ -140,10 +170,32 @@ void *collect2()
                // collect the junk data
                junkData(env2);
 
-               // write to the 0th flag since reader one will never look at it
-               env->rflags[0] = 1;
+               // set the flag
+               env2->rflag = 0;
 
                if (sem_post(&env2->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+          }
+          if (checkFlags(env3))
+          {
+               if (sem_wait(&env3->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+
+               // fill the second half with Bs
+               int i = env3->size / 2;
+               for (i; i < env3->size; i++)
+               {
+                    env3->data[i] = 'B';
+               }
+
+               // set the flag
+               env3->rflag = 0;
+
+               if (sem_post(&env3->mutex) == -1)
                {
                     exit(EXIT_FAILURE);
                };
@@ -156,23 +208,24 @@ void *reader1()
      char val;
      while (1)
      {
-          if (env1->rflags[0] == 1)
+          if (env1->rflag == 1)
           {
-               val = env1->data;
-               printf("Reader1: %s\n", val);
-               env1->rflags[0]=0;
+               printf("Reader1: %s\n", env1->data);
+               env1->rflag = 0;
           }
      }
 }
 
 void *reader2()
 {
-     char val;
      while (1)
      {
-          val = env2->data;
-          val = tolower(val);
-          printf("Reader2: %s\n", val);
+          if (env2->rflag == 1)
+          {
+               lower(env2);
+               printf("Reader2: %s\n", env2->data);
+               env2->rflag = 0;
+          }
      }
 }
 
@@ -200,6 +253,15 @@ void junkData(Environment *env)
      for (i = 0; i < env->size; i++)
      {
           env->data[i] = 'A' + (random() % 26);
+     }
+}
+
+void lower(Environment *env)
+{
+     int i = 0;
+     for (i; i < env->size, i++)
+     {
+          env->data[i] |= ' ';
      }
 }
 
