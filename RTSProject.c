@@ -27,6 +27,7 @@ pthread_t reader_t3;
 
 typedef struct environment
 {
+     sem_t mutex;
      int size;
      char *data;
 } Environment;
@@ -38,6 +39,7 @@ Environment env2;
 int N = 0;
 int nbytes;
 void init();
+void join();
 void *collect1();
 void *collect2();
 void *reader1();
@@ -52,11 +54,21 @@ int main()
 {
      init();
      // init fake environments
-     bzero(&env1, sizeof(env));
+     bzero(&env1, sizeof(Environment));
+     if (sem_init(&env1.mutex, 1, 1) == -1)
+     {
+          printf("Sem init ERROR = %i.\n", errno);
+          exit(1);
+     }
      env1.size = ENV_SIZE;
      env1.data = calloc(ENV_SIZE, sizeof(char));
 
-     bzero(&env2, sizeof(env));
+     bzero(&env2, sizeof(Environment));
+     if (sem_init(&env2.mutex, 1, 1) == -1)
+     {
+          printf("Sem init ERROR = %i.\n", errno);
+          exit(1);
+     }
      env2.size = ENV_SIZE;
      env2.data = calloc(ENV_SIZE, sizeof(char));
 
@@ -64,47 +76,29 @@ int main()
      int i, d, nbytes, cps;
      char *addr;
 
-     struct sigaction sa;
-
-     // The following structure is overlaid on the shared memory.
-     struct phu
-     {
-          sem_t s;
-          char beginning_of_data[SIZE];
-     } * p;
-
-     nbytes = sizeof(*p);
-
-     // Set up signal handler.
-     sa.sa_handler = timer_expired;
-     sa.sa_flags = 0;
-     sigemptyset(&sa.sa_mask);
-     if (sigaction(SIGALRM, &sa, NULL) < 0)
-     {
-          perror("sigaction SIGALRM.\n");
-          exit(1);
-     }
+     nbytes = sizeof(env1);
 
      // Create shared memory region.
-     /*if ((d = shm_open(SHMNAME, O_RDWR|O_CREAT|O_EXCL, 0666)) == -1) {
+     if ((d = shm_open(SHMNAME, O_RDWR|O_CREAT|O_EXCL, 0666)) == -1) {
           printf("Unable to open shared memory.\n");
           exit(1);
      }
+
      if (ftruncate(d, nbytes) != 0) {
           close(d);
           shm_unlink(SHMNAME);
           printf("Unable to truncate.\n");
           exit(1);
      }
-     p = (struct phu *)mmap(NULL, nbytes, PROT_READ|PROT_WRITE, MAP_SHARED, d, 
-     0);
+     p = (struct phu *)mmap(NULL, nbytes, PROT_READ|PROT_WRITE, MAP_SHARED, d, 0);
+
      if(p == (struct phu *) -1) {
           close(d);
           printf("Unable to mmap.\n"); 
           exit(1);
      }
 
-     shm_unlink(SHMNAME);*/
+     shm_unlink(SHMNAME);
 
      // Create semaphore.
      if (sem_init(&p->s, 1, 1) == -1)
@@ -121,6 +115,7 @@ int main()
 
      //alarm(TIME_PERIOD);
 
+     // todo remove me
      while (TRUE)
      {
 
@@ -146,6 +141,11 @@ int main()
 
           N++;
      }
+
+     // deallocate our "Environments"
+     free(env1.data);
+     free(env2.data);
+
 }
 
 void init()
@@ -154,29 +154,39 @@ void init()
      // Collect1
      result = pthread_create(&collect_t1, NULL, collect1, NULL);
      checkresult(result, "Thread create failed");
-     result = pthread_join(collect_t1, NULL);
-     checkresult(result, "Thread join failed");
+
      // Collect2
      result = pthread_create(&collect_t2, NULL, collect2, NULL);
      checkresult(result, "Thread create failed");
-     result = pthread_join(collect_t2, NULL);
-     checkresult(result, "Thread join failed");
+
      // Reader1
      result = pthread_create(&reader_t1, NULL, reader1, NULL);
      checkresult(result, "Thread create failed");
-     result = pthread_join(reader_t1, NULL);
-     checkresult(result, "Thread join failed");
+
      // Reader2
      result = pthread_create(&reader_t2, NULL, reader2, NULL);
      checkresult(result, "Thread create failed");
-     result = pthread_join(reader_t1, NULL);
-     checkresult(result, "Thread join failed");
+
      // Reader3
      result = pthread_create(&reader_t3, NULL, reader3, NULL);
      checkresult(result, "Thread create failed");
+}
+
+void join(){
+     int result;
+     result = pthread_join(collect_t1, NULL);
+     checkresult(result, "Thread join failed");
+     result = pthread_join(collect_t2, NULL);
+     checkresult(result, "Thread join failed");
+     result = pthread_join(reader_t1, NULL);
+     checkresult(result, "Thread join failed");
      result = pthread_join(reader_t2, NULL);
      checkresult(result, "Thread join failed");
+     result = pthread_join(reader_t3, NULL);
+     checkresult(result, "Thread join failed");          
 }
+
+
 
 void timer_expired(int called_via_signal)
 {
@@ -185,11 +195,17 @@ void timer_expired(int called_via_signal)
 }
 
 void *collect1()
-{
+{    
+     int fd;
      while (1)
      {
           // TODO semaphores
           junkData(&env1);
+          fd = shm_open("SHMNAME",O_RDONLY, S_IREAD);   
+	     if (fd == -1) {
+		     printf("Error opening the shared memory object: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	     }                           
      }
 }
 
