@@ -26,7 +26,7 @@ pthread_t reader_t3;
 typedef struct environment
 {
      sem_t mutex;
-     int rflags;
+     int rflags[3];
      int size;
      char *data;
 } Environment;
@@ -107,7 +107,8 @@ void join()
      checkresult(result, "Thread join failed");
 }
 
-void clean(){
+void clean()
+{
      destroyEnv(env1);
      destroyEnv(env2);
      destroyEnv(env3);
@@ -117,10 +118,10 @@ void *collect1()
 {
      while (1)
      {
-          if(checkflags(env1))
+          if (checkflags(env1))
           {
-                   // TODO semaphores
-                   junkData(env1);
+               // TODO semaphores
+               junkData(env1);
           }
           // TODO something with env1->data
      }
@@ -130,14 +131,23 @@ void *collect2()
 {
      while (1)
      {
-          if(checkflags(env2))
+          if (checkflags(env2))
           {
-                   if(sem_wait(&env->mutex) == -1){
-                        exit(-1);
-                   };
-                   junkData(env1);
+               if (sem_wait(&env2->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+               // collect the junk data
+               junkData(env2);
+
+               // write to the 0th flag since reader one will never look at it
+               env->rflags[0] = 1;
+
+               if (sem_post(&env2->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
           }
-          // TODO something with env2->data
      }
 }
 
@@ -146,11 +156,11 @@ void *reader1()
      char val;
      while (1)
      {
-          if()
-          {          
-          val = env1->data;          
-          printf("Reader1: %s\n", val);
-          env1->
+          if (env1->rflags[0] == 1)
+          {
+               val = env1->data;
+               printf("Reader1: %s\n", val);
+               env1->rflags[0]=0;
           }
      }
 }
@@ -160,9 +170,9 @@ void *reader2()
      char val;
      while (1)
      {
-          val =env2->data;
+          val = env2->data;
           val = tolower(val);
-          printf("Reader2: %s\n",val);
+          printf("Reader2: %s\n", val);
      }
 }
 
@@ -193,8 +203,9 @@ void junkData(Environment *env)
      }
 }
 
-int checkFlags(Environment * env){
-     return env->rflags; 
+int checkFlags(Environment *env)
+{
+     return env->rflags[0] && env->rflags[1] && env->rflags[2];
 }
 
 Environment *createEnv(size_t size)
