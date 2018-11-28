@@ -49,7 +49,7 @@ void *reader2();
 void *reader3();
 
 void checkresult(int result, char *text);
-void checkFlags(Environment *env);
+int checkFlags(Environment *env);
 void lower(Environment *env);
 void junkData(Environment *env);
 
@@ -58,8 +58,10 @@ void destroyEnv(Environment *env);
 
 int main()
 {
+	 puts("init");
      init();
      join();
+     puts("joined");
      clean();
 }
 
@@ -116,6 +118,9 @@ void clean()
 
 void *collect1()
 {
+
+//	puts("Starting collect 1");
+
      while (1)
      {
           if (checkFlags(env1))
@@ -124,12 +129,17 @@ void *collect1()
                {
                     exit(EXIT_FAILURE);
                };
+
+//               puts("Collecting data for env1");
+
+
                // collect the junk data
                junkData(env1);
 
+//               puts("Setting flag1");
                // set the flag
                env1->rflag = 0;
-
+//               puts("Posting Sem1");
                if (sem_post(&env1->mutex) == -1)
                {
                     exit(EXIT_FAILURE);
@@ -141,6 +151,7 @@ void *collect1()
                {
                     exit(EXIT_FAILURE);
                };
+//               puts("Collecting data for env3");
 
                // fill the first half with As
                int i = 0;
@@ -148,7 +159,7 @@ void *collect1()
                {
                     env3->data[i] = 'A';
                }
-
+//               puts("Posting Sem3");
                if (sem_post(&env3->mutex) == -1)
                {
                     exit(EXIT_FAILURE);
@@ -208,11 +219,21 @@ void *reader1()
      char val;
      while (1)
      {
-          if (env1->rflag == 1)
+          if (!checkFlags(env1))
           {
+        	  if (sem_wait(&env1->mutex) == -1)
+			 {
+				  exit(EXIT_FAILURE);
+			 };
                printf("Reader1: %s\n", env1->data);
-               env1->rflag = 0;
+               env1->rflag = 1;
+
+			 if (sem_post(&env1->mutex) == -1)
+			 {
+				  exit(EXIT_FAILURE);
+			 };
           }
+
      }
 }
 
@@ -220,12 +241,22 @@ void *reader2()
 {
      while (1)
      {
-          if (env2->rflag == 1)
-          {
-               lower(env2);
-               printf("Reader2: %s\n", env2->data);
-               env2->rflag = 0;
-          }
+         if (!checkFlags(env2))
+         {
+       	  if (sem_wait(&env2->mutex) == -1)
+			 {
+				  exit(EXIT_FAILURE);
+			 };
+       	  	  lower(env2);
+              printf("Reader2: %s\n", env2->data);
+              env2->rflag = 1;
+
+			 if (sem_post(&env2->mutex) == -1)
+			 {
+				  exit(EXIT_FAILURE);
+			 };
+         }
+         sleep(1);
      }
 }
 
@@ -234,7 +265,7 @@ void *reader3()
      char data;
      while (1)
      {
-          //TODO receive/retrieve data through IPC
+          printf("leds are stupid");
      }
 }
 
@@ -258,8 +289,8 @@ void junkData(Environment *env)
 
 void lower(Environment *env)
 {
-     int i = 0;
-     for (i; i < env->size, i++)
+     int i;
+     for (i = 0; i < env->size; i++)
      {
           env->data[i] |= ' ';
      }
@@ -267,7 +298,7 @@ void lower(Environment *env)
 
 int checkFlags(Environment *env)
 {
-     return env->rflags[0] && env->rflags[1] && env->rflags[2];
+     return env->rflag;
 }
 
 Environment *createEnv(size_t size)
@@ -281,6 +312,7 @@ Environment *createEnv(size_t size)
      }
      env->size = size;
      env->data = malloc(sizeof(char) * size);
+     env->rflag = 1;
 
      return env;
 }
@@ -293,6 +325,8 @@ void destroyEnv(Environment *env)
           {
                free(env->data);
           }
-          free(data);
+          free(env->data);
      }
 }
+// http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
+// http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.lib_ref%2Ftopic%2Fc%2Fclockperiod.html
