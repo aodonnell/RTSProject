@@ -6,6 +6,10 @@
 #include <limits.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <time.h>
+#include <sys/netmgr.h>
+#include <sys/neutrino.h>
+#include <sys/syspage.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -13,6 +17,15 @@
 #include <math.h>
 #include <float.h>
 #include <pthread.h>
+
+#define BLACK "\x1B[0m"
+#define RED "\x1B[31m"
+#define GREEN "\x1B[32m"
+#define BLUE "\x1B[34m"
+#define YELOW "\x1B[33m"
+#define MAGENTA "\x1B[35m"
+#define CYAN "\x1B[36m"
+#define WHITE "\x1B[37m"
 
 #define TIME_PERIOD 5
 #define SIZE 1
@@ -36,6 +49,22 @@ Environment *env1;
 Environment *env2;
 Environment *env3;
 
+struct sigevent event;
+volatile unsigned counter;
+const struct sigevent *handler(void *area, int id)
+{
+     // Wake up thread every 100th interrupt
+     if (++counter == 100)
+     {
+          counter = 0;
+          return (&event);
+     }
+     else
+     {
+          return (NULL);
+     }
+}
+
 int N = 0;
 int nbytes;
 void init();
@@ -52,21 +81,32 @@ void checkresult(int result, char *text);
 int checkFlags(Environment *env);
 void lower(Environment *env);
 void junkData(Environment *env);
+void changeColor(Environment *env);
 
 Environment *createEnv(size_t size);
 void destroyEnv(Environment *env);
 
 int main()
 {
-	 puts("init");
      init();
      join();
-     puts("joined");
-     clean();
+     clean(); 
 }
 
 void init()
 {
+     int id;
+
+     // Requensting IO privileges
+     ThreadCtl(_NTO_TCTL_IO, 0);
+     //Initialize event structure
+     event.sigev_notify = SIGEV_INTR;
+
+     //TODO set clock period using ClockPeriod()
+
+     //Attach ISR vector
+     id = InterruptAttach(0, &handler, NULL, 0, 0);
+
      // Create environments
      env1 = createEnv(ENV_SIZE);
      env2 = createEnv(ENV_SIZE);
@@ -118,9 +158,6 @@ void clean()
 
 void *collect1()
 {
-
-//	puts("Starting collect 1");
-
      while (1)
      {
           if (checkFlags(env1))
@@ -130,16 +167,11 @@ void *collect1()
                     exit(EXIT_FAILURE);
                };
 
-//               puts("Collecting data for env1");
-
-
                // collect the junk data
                junkData(env1);
 
-//               puts("Setting flag1");
                // set the flag
                env1->rflag = 0;
-//               puts("Posting Sem1");
                if (sem_post(&env1->mutex) == -1)
                {
                     exit(EXIT_FAILURE);
@@ -151,15 +183,10 @@ void *collect1()
                {
                     exit(EXIT_FAILURE);
                };
-//               puts("Collecting data for env3");
 
-               // fill the first half with As
-               int i = 0;
-               for (i; i < env3->size / 2; i++)
-               {
-                    env3->data[i] = 'A';
-               }
-//               puts("Posting Sem3");
+               // collect the junk data
+               junkData(env3);
+
                if (sem_post(&env3->mutex) == -1)
                {
                     exit(EXIT_FAILURE);
@@ -196,11 +223,12 @@ void *collect2()
                     exit(EXIT_FAILURE);
                };
 
-               // fill the second half with Bs
+               // fill the second half with Ms
+               // M is halfway through the alphabet
                int i = env3->size / 2;
                for (i; i < env3->size; i++)
                {
-                    env3->data[i] = 'B';
+                    env3->data[i] = 'M';
                }
 
                // set the flag
@@ -221,19 +249,18 @@ void *reader1()
      {
           if (!checkFlags(env1))
           {
-        	  if (sem_wait(&env1->mutex) == -1)
-			 {
-				  exit(EXIT_FAILURE);
-			 };
+               if (sem_wait(&env1->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
                printf("Reader1: %s\n", env1->data);
                env1->rflag = 1;
 
-			 if (sem_post(&env1->mutex) == -1)
-			 {
-				  exit(EXIT_FAILURE);
-			 };
+               if (sem_post(&env1->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
           }
-
      }
 }
 
@@ -241,31 +268,46 @@ void *reader2()
 {
      while (1)
      {
-         if (!checkFlags(env2))
-         {
-       	  if (sem_wait(&env2->mutex) == -1)
-			 {
-				  exit(EXIT_FAILURE);
-			 };
-       	  	  lower(env2);
-              printf("Reader2: %s\n", env2->data);
-              env2->rflag = 1;
+          if (!checkFlags(env2))
+          {
+               if (sem_wait(&env2->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+               lower(env2);
+               printf("Reader2: %s\n", env2->data);
+               env2->rflag = 1;
 
-			 if (sem_post(&env2->mutex) == -1)
-			 {
-				  exit(EXIT_FAILURE);
-			 };
-         }
-         sleep(1);
+               if (sem_post(&env2->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+          }
+          sleep(1);
      }
 }
 
 void *reader3()
 {
-     char data;
      while (1)
      {
-          printf("leds are stupid");
+          if (!checkFlags(env3))
+          {
+               if (sem_wait(&env3->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+               printf("Reader3: Changing color based on environment!\n");
+               changeColor(env3);
+               printf("Reader3: %s\n", env3->data);
+               env3->rflag = 1;
+
+               if (sem_post(&env3->mutex) == -1)
+               {
+                    exit(EXIT_FAILURE);
+               };
+          }
+          sleep(1);
      }
 }
 
@@ -328,5 +370,50 @@ void destroyEnv(Environment *env)
           free(env->data);
      }
 }
+
+void changeColor(Environment *env)
+{
+     // compute the average of the characters
+     int sum = 0;
+     float avg = 0.0;
+     int i = 0;
+
+     for (i; i < env->size; size++)
+     {
+          sum += env->data[i];
+     }
+
+     avg = sum / env->size;
+
+     if (avg < 4)
+     {
+          printf("%s", RED);
+     }
+     else if (avg < 8)
+     {
+          printf("%s", GREEN);
+     }
+     else if (avg < 12)
+     {
+          printf("%s", YELLOW);
+     }
+     else if (avg < 16)
+     {
+          printf("%s", BLUE);
+     }
+     else if (avg < 20)
+     {
+          printf("%s", CYAN);
+     }
+     else if (avg < 24)
+     {
+          printf("%s", MAGENTA);
+     }
+     else
+     {
+          printf("%s", WHITE);
+     }
+};
+
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.lib_ref%2Ftopic%2Fc%2Fclockperiod.html
