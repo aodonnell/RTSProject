@@ -46,7 +46,7 @@ void init();
 void join();
 void clean();
 
-const struct sigevent *handler(void *area, int id);
+const struct sigevent *isr(void *area, int id);
 void *collect1();
 void *collect2();
 void *reader1();
@@ -66,6 +66,7 @@ int main()
 void init()
 {
      int id;
+     int result;
 
      // Requensting IO privileges
      ThreadCtl(_NTO_TCTL_IO, 0);
@@ -77,14 +78,13 @@ void init()
      ClockPeriod(CLOCK_REALTIME, NULL, NULL, NULL);
 
      //Attach ISR vector
-     id = InterruptAttach(0, &handler, NULL, 0, 0);
+     id = InterruptAttach(SYSPAGE_ENTRY(qtime)->intr, isr, NULL, 0, 0);
 
      // Create environments
      env1 = createEnv(ENV_SIZE);
      env2 = createEnv(ENV_SIZE);
      env3 = createEnv(ENV_SIZE);
 
-     int result;
 
      // Reader1
      result = pthread_create(&reader_t1, NULL, reader1, NULL);
@@ -253,25 +253,30 @@ void checkresult(int result, char *text)
      }
 }
 
-const struct sigevent *handler(void *area, int id)
+const struct sigevent *isr(void *area, int id)
 {
+	printf("Here in the isr\n");
 
 	int wake_up = 1;
 	int result;
 
-	if(++counter == 2*wake_up){
+	if(++counter % 2*wake_up){
 		 // Collect2
 		 result = pthread_create(&collect_t2, NULL, collect2, NULL);
 		 checkresult(result, "Thread create failed");
 	     result = pthread_join(collect_t2, NULL);
 	     checkresult(result, "Thread join failed");
 	     counter = 0;
+	     return &event;
+
 	}else if (!counter % wake_up){
 	     // Collect1
 		 result = pthread_create(&collect_t1, NULL, collect1, NULL);
 		 checkresult(result, "Thread create failed");
 	     result = pthread_join(collect_t1, NULL);
 	     checkresult(result, "Thread join failed");
+	     return &event;
+
 	}
 
 	return (NULL);
