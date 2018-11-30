@@ -1,3 +1,10 @@
+/*
+ * Environment.h
+ *
+ *  Created on: 2018-11-30
+ *      Author: aodonne1
+ */
+
 #ifndef ENVIRONMENT_H
 #define ENVIRONMENT_H
 
@@ -27,6 +34,12 @@ typedef struct environment
      char *data;
 } Environment;
 
+// constructor for an environment
+Environment *createEnv(size_t size);
+
+// safely free an environment
+void destroyEnv(Environment *env);
+
 // fill the evironment with random letters
 void junkData(Environment *env);
 
@@ -35,12 +48,6 @@ void lower(Environment *env);
 
 // check the read flags of an environment
 int checkFlags(Environment *env);
-
-// constructor for an environment
-Environment *createEnv(size_t size);
-
-// safely free an environment
-void destroyEnv(Environment *env);
 
 // change colour based on the average letter in an environment
 void changeColor(Environment *env);
@@ -51,6 +58,4 @@ void safePost(Environment *env);
 // waits for the mutex of an environment. Kills the program if this fails
 void safeWait(Environment *env);
 
-void
-
-#endif
+#endif /* ENVIRONMENT_H_ */

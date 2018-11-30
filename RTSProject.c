@@ -20,6 +20,8 @@
 
 #include "Environment.h"
 
+// TODO add control c sig handler that changes the font back to white once the program is termninated
+
 #define TIME_PERIOD 5
 #define SIZE 1
 #define ENV_SIZE 10
@@ -36,20 +38,6 @@ Environment *env3;
 
 struct sigevent event;
 volatile unsigned counter;
-const struct sigevent *handler(void *area, int id)
-{
-     // Wake up thread every 100th interrupt
-     if (++counter == 100)
-     {
-          counter = 0;
-          
-          return (&event);
-     }
-     else
-     {
-          return (NULL);
-     }
-}
 
 int N = 0;
 int nbytes;
@@ -57,6 +45,7 @@ void init();
 void join();
 void clean();
 
+const struct sigevent *handler(void *area, int id);
 void *collect1();
 void *collect2();
 void *reader1();
@@ -69,7 +58,7 @@ int main()
 {
      init();
      join();
-     clean(); 
+     clean();
 }
 
 
@@ -79,10 +68,12 @@ void init()
 
      // Requensting IO privileges
      ThreadCtl(_NTO_TCTL_IO, 0);
+
      //Initialize event structure
      event.sigev_notify = SIGEV_INTR;
 
      //TODO set clock period using ClockPeriod()
+     ClockPeriod(CLOCK_REALTIME, NULL, NULL, NULL);
 
      //Attach ISR vector
      id = InterruptAttach(0, &handler, NULL, 0, 0);
@@ -93,13 +84,6 @@ void init()
      env3 = createEnv(ENV_SIZE);
 
      int result;
-     // Collect1
-     result = pthread_create(&collect_t1, NULL, collect1, NULL);
-     checkresult(result, "Thread create failed");
-
-     // Collect2
-     result = pthread_create(&collect_t2, NULL, collect2, NULL);
-     checkresult(result, "Thread create failed");
 
      // Reader1
      result = pthread_create(&reader_t1, NULL, reader1, NULL);
@@ -117,10 +101,7 @@ void init()
 void join()
 {
      int result;
-     result = pthread_join(collect_t1, NULL);
-     checkresult(result, "Thread join failed");
-     result = pthread_join(collect_t2, NULL);
-     checkresult(result, "Thread join failed");
+
      result = pthread_join(reader_t1, NULL);
      checkresult(result, "Thread join failed");
      result = pthread_join(reader_t2, NULL);
@@ -138,74 +119,74 @@ void clean()
 
 void *collect1()
 {
-     while (1)
-     {
-          if (checkFlags(env1))
-          {
-               safeWait(env1);
 
-               // collect the junk data
-               junkData(env1);
+	  if (checkFlags(env1))
+	  {
+		   safeWait(env1);
 
-               // set the read flag
-               env1->rflag = 0;
-               
-               safePost(env1)
-          }
-          if (checkFlags(env3))
-          {
-               safeWait(env3);
+		   // collect the junk data
+		   junkData(env1);
 
-               // collect the junk data
-               junkData(env3);
-          
-               safePost(env3);
-          }
-     }
+		   // set the read flag
+		   env1->rflag = 0;
+
+		   safePost(env1);
+	  }
+
+	  if (checkFlags(env3) == 1)
+	  {
+		   safeWait(env3);
+
+		   // collect the junk data
+		   junkData(env3);
+
+		   // increment the rflag
+		   env3->rflag++;
+
+		   safePost(env3);
+	  }
 }
 
 void *collect2()
 {
      static char fill = 'A';
+	  if (checkFlags(env2))
+	  {
+		   safeWait(env2);
 
-     while (1)
-     {
-          if (checkFlags(env2))
-          {
-               safeWait(env2);
+		   // collect the junk data
+		   junkData(env2);
 
-               // collect the junk data
-               junkData(env2);
+		   // set the read flag
+		   env2->rflag = 0;
 
-               // set the read flag
-               env2->rflag = 0;
+		   safePost(env2);
+	  }
 
-               safeWait(env2);
-          }
-          if (checkFlags(env3))
-          {
-               safeWait(env3);
+	  if (checkFlags(env3) == 2)
+	  {
+		   safeWait(env3);
 
-               // fill the second half with an incrementing character. 
-               // This makes it more likely that every colour will appear
-               int i = env3->size / 2;
-               for (i; i < env3->size; i++)
-               {
-                    env3->data[i] = fill;
-               }
+		   // fill the second half with an incrementing character.
+		   // This makes it more likely that every colour will appear
+		   int i = 2;
+		   for (i; i < env3->size; i++)
+		   {
+				env3->data[i] = fill;
+		   }
 
-               if(fill < 'Z'){
-                    fill ++;
-               }else{
-                    fill = 'A';
-               }
+		   if(fill < 'Z'){
+				fill ++;
+		   }else{
+				fill = 'A';
+		   }
 
-               // set the read flag
-               env3->rflag = 0;
+		   // set the read flag
+		   env3->rflag = 0;
 
-               safePost(env3);
-          }
-     }
+		   safePost(env3);
+	  }
+
 }
 
 void *reader1()
@@ -222,6 +203,7 @@ void *reader1()
 
                safePost(env1);
           }
+          sleep(1);
      }
 }
 
@@ -270,7 +252,29 @@ void checkresult(int result, char *text)
      }
 }
 
+const struct sigevent *handler(void *area, int id)
+{
 
+	int wake_up = 1;
+	int result;
+
+	if(++counter == 2*wake_up){
+		 // Collect2
+		 result = pthread_create(&collect_t2, NULL, collect2, NULL);
+		 checkresult(result, "Thread create failed");
+	     result = pthread_join(collect_t2, NULL);
+	     checkresult(result, "Thread join failed");
+	     counter = 0;
+	}else if (!counter % wake_up){
+	     // Collect1
+		 result = pthread_create(&collect_t1, NULL, collect1, NULL);
+		 checkresult(result, "Thread create failed");
+	     result = pthread_join(collect_t1, NULL);
+	     checkresult(result, "Thread join failed");
+	}
+
+	return (NULL);
+}
 
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.lib_ref%2Ftopic%2Fc%2Fclockperiod.html

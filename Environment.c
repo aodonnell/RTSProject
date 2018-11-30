@@ -1,3 +1,11 @@
+/*
+ * Environment.c
+ *
+ *  Created on: 2018-11-30
+ *      Author: aodonne1
+ */
+
+
 #include "Environment.h"
 
 // fill the evironment with random letters
@@ -62,38 +70,40 @@ void changeColor(Environment *env)
      // compute the average of the characters
      int sum = 0;
      float avg = 0.0;
-     int i = 0;
+     int i;
 
-     for (i; i < env->size; env->size++)
+     for (i = 0; i < env->size; i++)
      {
-          sum += env->data[i];
+          sum += (int) env->data[i];
      }
 
-     avg = sum / env->size;
-     
+     avg = (float)sum / (float)env->size;
+
+     printf("Sum: 0x%X, N: %d. Average: 0x%X ('%c')\n", sum, env->size, (int) avg, (char) avg);
+
      // Each group of letters cooresponds to a different output color
-     // ABCD EFGH IJKL MNOP QRST UVW XYZ
-     if (avg < 'E')
+     // ABCDEF GHIJ KLM N OPQ RSTU VWXYZ
+     if (avg < 'G')
      {
           printf("%s", RED);
      }
-     else if (avg < 'I')
+     else if (avg < 'K')
      {
           printf("%s", GREEN);
      }
-     else if (avg < 'M')
+     else if (avg < 'N')
      {
           printf("%s", YELLOW);
      }
-     else if (avg < 'Q')
+     else if (avg < 'O')
      {
           printf("%s", BLUE);
      }
-     else if (avg < 'U')
+     else if (avg < 'R')
      {
           printf("%s", CYAN);
      }
-     else if (avg < 'X')
+     else if (avg < 'V')
      {
           printf("%s", MAGENTA);
      }
