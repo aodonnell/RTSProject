@@ -102,3 +102,17 @@ void changeColor(Environment *env)
           printf("%s", WHITE);
      }
 };
+
+void safePost(Environment *env){
+    if (sem_post(&env->mutex) == -1)
+    {
+        exit(EXIT_FAILURE);
+    };
+};
+
+void safeWait(Environment *env){
+    if (sem_wait(&env->mutex) == -1)
+    {
+        exit(EXIT_FAILURE);
+    };
+};

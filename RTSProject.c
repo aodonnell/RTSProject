@@ -29,8 +29,6 @@ pthread_t reader_t1;
 pthread_t reader_t2;
 pthread_t reader_t3;
 
-
-
 // environment struct
 Environment *env1;
 Environment *env2;
@@ -66,13 +64,6 @@ void *reader2();
 void *reader3();
 
 void checkresult(int result, char *text);
-int checkFlags(Environment *env);
-void lower(Environment *env);
-void junkData(Environment *env);
-void changeColor(Environment *env);
-
-Environment *createEnv(size_t size);
-void destroyEnv(Environment *env);
 
 int main()
 {
@@ -151,35 +142,24 @@ void *collect1()
      {
           if (checkFlags(env1))
           {
-               if (sem_wait(&env1->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env1);
 
                // collect the junk data
                junkData(env1);
 
                // set the read flag
                env1->rflag = 0;
-               if (sem_post(&env1->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               
+               safePost(env1)
           }
           if (checkFlags(env3))
           {
-               if (sem_wait(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env3);
 
                // collect the junk data
                junkData(env3);
-
-               if (sem_post(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+          
+               safePost(env3);
           }
      }
 }
@@ -192,27 +172,19 @@ void *collect2()
      {
           if (checkFlags(env2))
           {
-               if (sem_wait(&env2->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env2);
+
                // collect the junk data
                junkData(env2);
 
                // set the read flag
                env2->rflag = 0;
 
-               if (sem_post(&env2->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env2);
           }
           if (checkFlags(env3))
           {
-               if (sem_wait(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env3);
 
                // fill the second half with an incrementing character. 
                // This makes it more likely that every colour will appear
@@ -231,10 +203,7 @@ void *collect2()
                // set the read flag
                env3->rflag = 0;
 
-               if (sem_post(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safePost(env3);
           }
      }
 }
@@ -246,17 +215,12 @@ void *reader1()
      {
           if (!checkFlags(env1))
           {
-               if (sem_wait(&env1->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env1);
+
                printf("Reader1: %s\n", env1->data);
                env1->rflag = 1;
 
-               if (sem_post(&env1->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safePost(env1);
           }
      }
 }
@@ -267,19 +231,13 @@ void *reader2()
      {
           if (!checkFlags(env2))
           {
-               if (sem_wait(&env2->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env2);
                lower(env2);
                printf("Reader2: %s\n", env2->data);
                env2->rflag = 1;
-
-               if (sem_post(&env2->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safePost(env2);
           }
+          // TODO instead of sleeping, we need to wake up this thread from a timer event
           sleep(1);
      }
 }
@@ -290,19 +248,14 @@ void *reader3()
      {
           if (!checkFlags(env3))
           {
-               if (sem_wait(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safeWait(env3);
+
                changeColor(env3);
                printf("Reader3: Changing color based on the stats of the environment!\n");
                printf("Reader3: %s\n", env3->data);
                env3->rflag = 1;
 
-               if (sem_post(&env3->mutex) == -1)
-               {
-                    exit(EXIT_FAILURE);
-               };
+               safePost(env3);
           }
           sleep(1);
      }

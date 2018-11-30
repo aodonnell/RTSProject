@@ -43,6 +43,14 @@ Environment *createEnv(size_t size);
 void destroyEnv(Environment *env);
 
 // change colour based on the average letter in an environment
-void changeColor(Environment *env)
+void changeColor(Environment *env);
+
+// posts to the mutex of an environment. Kills the program if this fails
+void safePost(Environment *env);
+
+// waits for the mutex of an environment. Kills the program if this fails
+void safeWait(Environment *env);
+
+void
 
 #endif
