@@ -57,6 +57,7 @@ const struct sigevent *handler(void *area, int id)
      if (++counter == 100)
      {
           counter = 0;
+          
           return (&event);
      }
      else
@@ -197,6 +198,8 @@ void *collect1()
 
 void *collect2()
 {
+     static char fill = 'A';
+
      while (1)
      {
           if (checkFlags(env2))
@@ -223,12 +226,18 @@ void *collect2()
                     exit(EXIT_FAILURE);
                };
 
-               // fill the second half with Ms
-               // M is halfway through the alphabet
+               // fill the second half with an incrementing character. 
+               // This makes it more likely that every colour will appear
                int i = env3->size / 2;
                for (i; i < env3->size; i++)
                {
-                    env3->data[i] = 'M';
+                    env3->data[i] = fill;
+               }
+
+               if(fill < 'Z'){
+                    fill ++;
+               }else{
+                    fill = 'A';
                }
 
                // set the flag
@@ -297,8 +306,8 @@ void *reader3()
                {
                     exit(EXIT_FAILURE);
                };
-               printf("Reader3: Changing color based on environment!\n");
                changeColor(env3);
+               printf("Reader3: Changing color based on the stats of the environment!\n");
                printf("Reader3: %s\n", env3->data);
                env3->rflag = 1;
 
