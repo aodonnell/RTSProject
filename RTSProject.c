@@ -18,14 +18,7 @@
 #include <float.h>
 #include <pthread.h>
 
-#define BLACK "\x1B[0m"
-#define RED "\x1B[31m"
-#define GREEN "\x1B[32m"
-#define BLUE "\x1B[34m"
-#define YELOW "\x1B[33m"
-#define MAGENTA "\x1B[35m"
-#define CYAN "\x1B[36m"
-#define WHITE "\x1B[37m"
+#include "Environment.h"
 
 #define TIME_PERIOD 5
 #define SIZE 1
@@ -36,13 +29,7 @@ pthread_t reader_t1;
 pthread_t reader_t2;
 pthread_t reader_t3;
 
-typedef struct environment
-{
-     sem_t mutex;
-     int rflag;
-     int size;
-     char *data;
-} Environment;
+
 
 // environment struct
 Environment *env1;
@@ -93,6 +80,7 @@ int main()
      join();
      clean(); 
 }
+
 
 void init()
 {
@@ -171,7 +159,7 @@ void *collect1()
                // collect the junk data
                junkData(env1);
 
-               // set the flag
+               // set the read flag
                env1->rflag = 0;
                if (sem_post(&env1->mutex) == -1)
                {
@@ -211,7 +199,7 @@ void *collect2()
                // collect the junk data
                junkData(env2);
 
-               // set the flag
+               // set the read flag
                env2->rflag = 0;
 
                if (sem_post(&env2->mutex) == -1)
@@ -240,7 +228,7 @@ void *collect2()
                     fill = 'A';
                }
 
-               // set the flag
+               // set the read flag
                env3->rflag = 0;
 
                if (sem_post(&env3->mutex) == -1)
@@ -329,100 +317,7 @@ void checkresult(int result, char *text)
      }
 }
 
-void junkData(Environment *env)
-{
-     int i;
-     for (i = 0; i < env->size; i++)
-     {
-          env->data[i] = 'A' + (random() % 26);
-     }
-}
 
-void lower(Environment *env)
-{
-     int i;
-     for (i = 0; i < env->size; i++)
-     {
-          env->data[i] |= ' ';
-     }
-}
-
-int checkFlags(Environment *env)
-{
-     return env->rflag;
-}
-
-Environment *createEnv(size_t size)
-{
-     Environment *env = calloc(1, sizeof(Environment));
-
-     if (sem_init(&env->mutex, 1, 1) == -1)
-     {
-          printf("Sem init ERROR = %i.\n", errno);
-          exit(1);
-     }
-     env->size = size;
-     env->data = malloc(sizeof(char) * size);
-     env->rflag = 1;
-
-     return env;
-}
-
-void destroyEnv(Environment *env)
-{
-     if (env)
-     {
-          if (env->data)
-          {
-               free(env->data);
-          }
-          free(env->data);
-     }
-}
-
-void changeColor(Environment *env)
-{
-     // compute the average of the characters
-     int sum = 0;
-     float avg = 0.0;
-     int i = 0;
-
-     for (i; i < env->size; size++)
-     {
-          sum += env->data[i];
-     }
-
-     avg = sum / env->size;
-
-     if (avg < 4)
-     {
-          printf("%s", RED);
-     }
-     else if (avg < 8)
-     {
-          printf("%s", GREEN);
-     }
-     else if (avg < 12)
-     {
-          printf("%s", YELLOW);
-     }
-     else if (avg < 16)
-     {
-          printf("%s", BLUE);
-     }
-     else if (avg < 20)
-     {
-          printf("%s", CYAN);
-     }
-     else if (avg < 24)
-     {
-          printf("%s", MAGENTA);
-     }
-     else
-     {
-          printf("%s", WHITE);
-     }
-};
 
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.lib_ref%2Ftopic%2Fc%2Fclockperiod.html
