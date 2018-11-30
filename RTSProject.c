@@ -21,6 +21,7 @@
 #include "Environment.h"
 
 // TODO add control c sig handler that changes the font back to white once the program is termninated
+// TODO set an alarm to kill the threads once it expires. Maybe use a global is_running var to replace the while(1)s in the threads
 
 #define TIME_PERIOD 5
 #define SIZE 1
