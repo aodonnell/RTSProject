@@ -23,7 +23,7 @@
 // TODO add control c sig handler that changes the font back to white once the program is termninated
 // TODO set an alarm to kill the threads once it expires. Maybe use a global is_running var to replace the while(1)s in the threads
 
-#define TIME_PERIOD 5
+#define RUN_TIME 27
 #define SIZE 1
 #define ENV_SIZE 10
 
@@ -55,6 +55,7 @@ void join();
 void clean();
 
 const struct sigevent *isr(void *area, int id);
+void * killer();
 void *collect1();
 void *collect2();
 void *reader1();
@@ -83,6 +84,7 @@ void init() {
 	struct sigevent event, event2;
 	struct itimerspec itime;
 
+
 	// Requensting IO privileges
 	result = ThreadCtl(_NTO_TCTL_IO, 0);
 
@@ -91,8 +93,6 @@ void init() {
 	itime.it_interval.tv_nsec = (int) 5e6;
 	itime.it_value.tv_sec = 0;
 	itime.it_value.tv_nsec = (int) 5e6;
-
-	printf("itime value: %d\n", itime.it_value.tv_nsec);
 
 	// init event structures and pulse channel
 	chid1 = ChannelCreate(0);
@@ -114,8 +114,6 @@ void init() {
 	itime.it_value.tv_sec = 1;
 	itime.it_value.tv_nsec = 0;
 
-	printf("itime value: %d\n", itime.it_value.tv_nsec);
-
 	// init event structures and pulse channel
 
 	chid2 = ChannelCreate(0);
@@ -130,10 +128,6 @@ void init() {
 
 	timer_create(CLOCK_MONOTONIC, &event, &timer);
 	timer_settime(timer, 0, &itime, NULL);
-
-
-	puts("done");
-
 
 
 	//	Collect1
@@ -155,6 +149,20 @@ void init() {
 	// Reader3
 	result = pthread_create(&reader_t3, NULL, reader3, NULL);
 	checkresult(result, "Thread create failed");
+
+	// register killer to terminate the program
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = killer;
+
+	if(sigaction(SIGALRM, &sa, NULL) < 0){
+		printf("Failed to set up signal handler.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	alarm(RUN_TIME);
+
 }
 
 void join() {
@@ -166,6 +174,8 @@ void join() {
 	checkresult(result, "Thread join failed");
 	result = pthread_join(reader_t3, NULL);
 	checkresult(result, "Thread join failed");
+
+	sleep(1);
 }
 
 void clean() {
@@ -303,6 +313,14 @@ void checkresult(int result, char *text) {
 		exit(1);
 	}
 }
+
+void * killer(){
+	printf("Killed!\n");
+	is_running = 0;
+    printf("%s", WHITE);
+
+};
+
 
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.lib_ref%2Ftopic%2Fc%2Fclockperiod.html

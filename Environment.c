@@ -60,7 +60,7 @@ void destroyEnv(Environment *env)
           {
                free(env->data);
           }
-          free(env->data);
+          free(env);
      }
 }
 
