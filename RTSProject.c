@@ -26,6 +26,13 @@
 #define TIME_PERIOD 5
 #define SIZE 1
 #define ENV_SIZE 10
+
+typedef union {
+	struct _pulse pulse;
+} message_t;
+
+message_t msg1, msg2;
+
 pthread_t collect_t1;
 pthread_t collect_t2;
 pthread_t reader_t1;
@@ -37,10 +44,11 @@ Environment *env1;
 Environment *env2;
 Environment *env3;
 
-struct sigevent event;
 volatile unsigned counter;
 
 int N = 0;
+int chid1, chid2;
+int is_running = 1;
 int nbytes;
 void init();
 void join();
@@ -55,231 +63,245 @@ void *reader3();
 
 void checkresult(int result, char *text);
 
-int main()
-{
-     init();
-     join();
-     clean();
+int main() {
+	init();
+	join();
+	clean();
 }
 
+void init() {
 
-void init()
-{
-     int id;
-     int result;
+	// Create environments
+	env1 = createEnv(ENV_SIZE);
+	env2 = createEnv(ENV_SIZE);
+	env3 = createEnv(ENV_SIZE);
 
-     // Requensting IO privileges
-     ThreadCtl(_NTO_TCTL_IO, 0);
+	int id;
+	int result;
+	timer_t timer;
 
-     //Initialize event structure
-     event.sigev_notify = SIGEV_INTR;
+	struct sigevent event, event2;
+	struct itimerspec itime;
 
-     //TODO set clock period using ClockPeriod()
-     ClockPeriod(CLOCK_REALTIME, NULL, NULL, NULL);
+	// Requensting IO privileges
+	result = ThreadCtl(_NTO_TCTL_IO, 0);
 
-     //Attach ISR vector
-     id = InterruptAttach(SYSPAGE_ENTRY(qtime)->intr, isr, NULL, 0, 0);
+	// setup timer interval for 0.5 seconds
+	itime.it_interval.tv_sec = 0;
+	itime.it_interval.tv_nsec = (int) 5e6;
+	itime.it_value.tv_sec = 0;
+	itime.it_value.tv_nsec = (int) 5e6;
 
-     // Create environments
-     env1 = createEnv(ENV_SIZE);
-     env2 = createEnv(ENV_SIZE);
-     env3 = createEnv(ENV_SIZE);
+	printf("itime value: %d\n", itime.it_value.tv_nsec);
+
+	// init event structures and pulse channel
+	chid1 = ChannelCreate(0);
+	SIGEV_INTR_INIT(&event);
+	InterruptAttachEvent(10, &event, 0);
+
+	event.sigev_notify = SIGEV_PULSE;
+	event.sigev_coid = ConnectAttach(ND_LOCAL_NODE, 0, chid1, _NTO_SIDE_CHANNEL,
+			0);
+	event.sigev_priority = getprio(0);
+	event.sigev_code = _PULSE_CODE_MINAVAIL;
+
+	timer_create(CLOCK_MONOTONIC, &event, &timer);
+	timer_settime(timer, 0, &itime, NULL);
+
+	// setup timer interval for 1 second
+	itime.it_interval.tv_sec = 1;
+	itime.it_interval.tv_nsec = 0;
+	itime.it_value.tv_sec = 1;
+	itime.it_value.tv_nsec = 0;
+
+	printf("itime value: %d\n", itime.it_value.tv_nsec);
+
+	// init event structures and pulse channel
+
+	chid2 = ChannelCreate(0);
+	SIGEV_INTR_INIT(&event);
+	InterruptAttachEvent(9, &event, 0);
+
+	event.sigev_notify = SIGEV_PULSE;
+	event.sigev_coid = ConnectAttach(ND_LOCAL_NODE, 0, chid2, _NTO_SIDE_CHANNEL,
+			0);
+	event.sigev_priority = getprio(0);
+	event.sigev_code = _PULSE_CODE_MINAVAIL;
+
+	timer_create(CLOCK_MONOTONIC, &event, &timer);
+	timer_settime(timer, 0, &itime, NULL);
 
 
-     // Reader1
-     result = pthread_create(&reader_t1, NULL, reader1, NULL);
-     checkresult(result, "Thread create failed");
+	puts("done");
 
-     // Reader2
-     result = pthread_create(&reader_t2, NULL, reader2, NULL);
-     checkresult(result, "Thread create failed");
 
-     // Reader3
-     result = pthread_create(&reader_t3, NULL, reader3, NULL);
-     checkresult(result, "Thread create failed");
+
+	//	Collect1
+	result = pthread_create(&collect_t1, NULL, collect1, NULL);
+	checkresult(result, "Thread create failed");
+
+	//	Collect2
+	result = pthread_create(&collect_t2, NULL, collect2, NULL);
+	checkresult(result, "Thread create failed");
+
+	// Reader1
+	result = pthread_create(&reader_t1, NULL, reader1, NULL);
+	checkresult(result, "Thread create failed");
+
+	// Reader2
+	result = pthread_create(&reader_t2, NULL, reader2, NULL);
+	checkresult(result, "Thread create failed");
+
+	// Reader3
+	result = pthread_create(&reader_t3, NULL, reader3, NULL);
+	checkresult(result, "Thread create failed");
 }
 
-void join()
-{
-     int result;
-
-     result = pthread_join(reader_t1, NULL);
-     checkresult(result, "Thread join failed");
-     result = pthread_join(reader_t2, NULL);
-     checkresult(result, "Thread join failed");
-     result = pthread_join(reader_t3, NULL);
-     checkresult(result, "Thread join failed");
-}
-
-void clean()
-{
-     destroyEnv(env1);
-     destroyEnv(env2);
-     destroyEnv(env3);
-}
-
-void *collect1()
-{
-
-	  if (checkFlags(env1))
-	  {
-		   safeWait(env1);
-
-		   // collect the junk data
-		   junkData(env1);
-
-		   // set the read flag
-		   env1->rflag = 0;
-
-		   safePost(env1);
-	  }
-
-	  if (checkFlags(env3) == 1)
-	  {
-		   safeWait(env3);
-
-		   // collect the junk data
-		   junkData(env3);
-
-		   // increment the rflag
-		   env3->rflag++;
-
-		   safePost(env3);
-	  }
-}
-
-void *collect2()
-{
-     static char fill = 'A';
-	  if (checkFlags(env2))
-	  {
-		   safeWait(env2);
-
-		   // collect the junk data
-		   junkData(env2);
-
-		   // set the read flag
-		   env2->rflag = 0;
-
-		   safePost(env2);
-	  }
-
-	  if (checkFlags(env3) == 2)
-	  {
-		   safeWait(env3);
-
-		   // fill the second half with an incrementing character.
-		   // This makes it more likely that every colour will appear
-		   int i = 2;
-		   for (i; i < env3->size; i++)
-		   {
-				env3->data[i] = fill;
-		   }
-
-		   if(fill < 'Z'){
-				fill ++;
-		   }else{
-				fill = 'A';
-		   }
-
-		   // set the read flag
-		   env3->rflag = 0;
-
-		   safePost(env3);
-	  }
-
-}
-
-void *reader1()
-{
-     char val;
-     while (1)
-     {
-          if (!checkFlags(env1))
-          {
-               safeWait(env1);
-
-               printf("Reader1: %s\n", env1->data);
-               env1->rflag = 1;
-
-               safePost(env1);
-          }
-          sleep(1);
-     }
-}
-
-void *reader2()
-{
-     while (1)
-     {
-          if (!checkFlags(env2))
-          {
-               safeWait(env2);
-               lower(env2);
-               printf("Reader2: %s\n", env2->data);
-               env2->rflag = 1;
-               safePost(env2);
-          }
-          // TODO instead of sleeping, we need to wake up this thread from a timer event
-          sleep(1);
-     }
-}
-
-void *reader3()
-{
-     while (1)
-     {
-          if (!checkFlags(env3))
-          {
-               safeWait(env3);
-
-               changeColor(env3);
-               printf("Reader3: Changing color based on the stats of the environment!\n");
-               printf("Reader3: %s\n", env3->data);
-               env3->rflag = 1;
-
-               safePost(env3);
-          }
-          sleep(1);
-     }
-}
-
-void checkresult(int result, char *text)
-{
-     if (result == -1)
-     {
-          perror(text);
-          exit(1);
-     }
-}
-
-const struct sigevent *isr(void *area, int id)
-{
-	printf("Here in the isr\n");
-
-	int wake_up = 1;
+void join() {
 	int result;
 
-	if(++counter % 2*wake_up){
-		 // Collect2
-		 result = pthread_create(&collect_t2, NULL, collect2, NULL);
-		 checkresult(result, "Thread create failed");
-	     result = pthread_join(collect_t2, NULL);
-	     checkresult(result, "Thread join failed");
-	     counter = 0;
-	     return &event;
+	result = pthread_join(reader_t1, NULL);
+	checkresult(result, "Thread join failed");
+	result = pthread_join(reader_t2, NULL);
+	checkresult(result, "Thread join failed");
+	result = pthread_join(reader_t3, NULL);
+	checkresult(result, "Thread join failed");
+}
 
-	}else if (!counter % wake_up){
-	     // Collect1
-		 result = pthread_create(&collect_t1, NULL, collect1, NULL);
-		 checkresult(result, "Thread create failed");
-	     result = pthread_join(collect_t1, NULL);
-	     checkresult(result, "Thread join failed");
-	     return &event;
+void clean() {
+	destroyEnv(env1);
+	destroyEnv(env2);
+	destroyEnv(env3);
+}
 
+void *collect1() {
+	int rcvid;
+	while (is_running) {
+
+		rcvid = MsgReceive(chid1, &msg1, sizeof(msg1), NULL); //wait for message on the channel
+		if (rcvid == 0) {
+			if (checkFlags(env1)) {
+				safeWait(env1);
+
+				// collect the junk data
+				junkData(env1);
+
+				// set the read flag
+				env1->rflag = 0;
+
+				safePost(env1);
+			}
+
+			if (checkFlags(env3) == 1) {
+				safeWait(env3);
+
+				// collect the junk data
+				junkData(env3);
+
+				// increment the rflag
+				env3->rflag++;
+
+				safePost(env3);
+			}
+		}
 	}
+}
 
-	return (NULL);
+void *collect2() {
+	static char fill = 'A';
+	int rcvid;
+
+	while (is_running) {
+		rcvid = MsgReceive(chid2, &msg2, sizeof(msg2), NULL); //wait for message on the channel
+		if (rcvid == 0) {
+			if (checkFlags(env2)) {
+				safeWait(env2);
+
+				// collect the junk data
+				junkData(env2);
+
+				// set the read flag
+				env2->rflag = 0;
+
+				safePost(env2);
+			}
+
+			if (checkFlags(env3) == 2) {
+				safeWait(env3);
+
+				// fill the second half with an incrementing character.
+				// This makes it more likely that every colour will appear
+				int i = 2;
+				for (i; i < env3->size; i++) {
+					env3->data[i] = fill;
+				}
+
+				if (fill < 'Z') {
+					fill++;
+				} else {
+					fill = 'A';
+				}
+
+				// set the read flag
+				env3->rflag = 0;
+
+				safePost(env3);
+			}
+		}
+	}
+}
+
+void *reader1() {
+	char val;
+	while (is_running) {
+		if (!checkFlags(env1)) {
+			safeWait(env1);
+
+			printf("Reader1: %s\n", env1->data);
+			env1->rflag = 1;
+
+			safePost(env1);
+		}
+		sleep(1);
+	}
+}
+
+void *reader2() {
+	while (is_running) {
+		if (!checkFlags(env2)) {
+			safeWait(env2);
+			lower(env2);
+			printf("Reader2: %s\n", env2->data);
+			env2->rflag = 1;
+			safePost(env2);
+		}
+		// TODO instead of sleeping, we need to wake up this thread from a timer event
+		sleep(1);
+	}
+}
+
+void *reader3() {
+	while (is_running) {
+		if (!checkFlags(env3)) {
+			safeWait(env3);
+
+			changeColor(env3);
+			printf(
+					"Reader3: Changing color based on the stats of the environment!\n");
+			printf("Reader3: %s\n", env3->data);
+			env3->rflag = 1;
+
+			safePost(env3);
+		}
+		sleep(1);
+	}
+}
+
+void checkresult(int result, char *text) {
+	if (result == -1) {
+		perror(text);
+		exit(1);
+	}
 }
 
 // http://www.qnx.com/developers/docs/qnxcar2/index.jsp?topic=%2Fcom.qnx.doc.neutrino.prog%2Ftopic%2Finthandler_Attaching.html
