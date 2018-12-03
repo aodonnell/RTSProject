@@ -69,7 +69,7 @@ int main()
 {
     init();
     join();
-    killer();
+//    killer();
 }
 
 void init()
@@ -319,10 +319,10 @@ void checkresult(int result, char *text)
 
 void *killer()
 {
+    printf("%s", WHITE);
     printf("Killed!\n");
     is_running = 0;
-	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
-    printf("%s", WHITE);
+	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d\n",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
     clean();
     exit(EXIT_SUCCESS);
 };
