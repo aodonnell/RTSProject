@@ -95,9 +95,9 @@ void init() {
 
 	// setup timer interval for 0.5 seconds
 	itime.it_interval.tv_sec = 0;
-	itime.it_interval.tv_nsec = (int) 5e6;
+	itime.it_interval.tv_nsec = (int) 5e8;
 	itime.it_value.tv_sec = 0;
-	itime.it_value.tv_nsec = (int) 5e6;
+	itime.it_value.tv_nsec = (int) 5e8;
 
 	// init event structures and pulse channel
 	chid1 = ChannelCreate(0);
@@ -253,8 +253,9 @@ void *reader1() {
 			env1->rflag = 1;
 
 			safePost(env1);
+			counter1++;
 		}
-		counter1++;
+
 	}
 }
 
@@ -273,9 +274,10 @@ void *reader2() {
 			}
 			env2->rflag = 1;
 			safePost(env2);
+			counter2++;
 		}
 		// TODO instead of sleeping, we need to wake up this thread from a timer event
-		counter2++;
+
 	}
 }
 
@@ -302,8 +304,9 @@ void *reader3() {
 			env4->rflag = 1;
 
 			safePost(env4);
+			counter3++;
 		}
-		counter3++;
+
 	}
 }
 
@@ -315,10 +318,10 @@ void checkresult(int result, char *text) {
 }
 
 void * killer(){
+    printf("%s", WHITE);
 	printf("Killed!\n");
 	is_running = 0;
-	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
-    printf("%s", WHITE);
+	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d\n",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
 
 };
 
