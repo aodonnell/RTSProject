@@ -5,6 +5,7 @@
         "string": "c",
         "string_view": "c",
         "utility": "c",
-        "mman.h": "c"
+        "mman.h": "c",
+        "string.h": "c"
     }
 }
