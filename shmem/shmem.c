@@ -59,7 +59,7 @@ void join();
 void clean();
 
 const struct sigevent *isr(void *area, int id);
-void * killer();
+void *killer();
 void *collect1();
 void *collect2();
 void *reader1();
@@ -105,8 +105,7 @@ void init() {
 	InterruptAttachEvent(10, &event, 0);
 
 	event.sigev_notify = SIGEV_PULSE;
-	event.sigev_coid = ConnectAttach(ND_LOCAL_NODE, 0, chid1, _NTO_SIDE_CHANNEL,
-			0);
+	event.sigev_coid = ConnectAttach(ND_LOCAL_NODE, 0, chid1, _NTO_SIDE_CHANNEL, 0);
 	event.sigev_priority = getprio(0);
 	event.sigev_code = _PULSE_CODE_MINAVAIL;
 
@@ -196,8 +195,8 @@ void *collect1() {
 
 		rcvid = MsgReceive(chid1, &msg1, sizeof(msg1), NULL); //wait for message on the channel
 		if (rcvid == 0) {
+			safeWait(env1);
 			if (checkFlags(env1)) {
-				safeWait(env1);
 
 				// collect the junk data
 				junkData(env1);
@@ -205,10 +204,8 @@ void *collect1() {
 				// set the read flag
 				env1->rflag = 0;
 
-				safePost(env1);
 			}
-
-
+			safePost(env1);
 		}
 	}
 }
@@ -220,8 +217,8 @@ void *collect2() {
 	while (is_running) {
 		rcvid = MsgReceive(chid2, &msg2, sizeof(msg2), NULL); //wait for message on the channel
 		if (rcvid == 0) {
+			safeWait(env2);
 			if (checkFlags(env2)) {
-				safeWait(env2);
 
 				// collect the junk data
 				junkData(env2);
@@ -229,8 +226,8 @@ void *collect2() {
 				// set the read flag
 				env2->rflag = 0;
 
-				safePost(env2);
 			}
+			safePost(env2);
 		}
 	}
 }
@@ -238,44 +235,44 @@ void *collect2() {
 void *reader1() {
 	char val;
 	while (is_running) {
+		safeWait(env1);
 		if (!checkFlags(env1)) {
-			safeWait(env1);
 
 			printf("Reader1: %s\n", env1->data);
+			safeWait(env3);
 			fwd(env1,env3);
 			if (checkFlags(env3)) {
-				safeWait(env3);
 				// increment the rflag
 				env3->rflag=0;
-				safePost(env3);
 			}
+			safePost(env3);
 
 			env1->rflag = 1;
 
-			safePost(env1);
 			counter1++;
 		}
+		safePost(env1);
 
 	}
 }
 
 void *reader2() {
 	while (is_running) {
+		safeWait(env2);
 		if (!checkFlags(env2)) {
-			safeWait(env2);
 			lower(env2);
 			printf("Reader2: %s\n", env2->data);
+			safeWait(env4);
 			fwd(env2,env4);
 			if (checkFlags(env4) == 1) {
-				safeWait(env4);
 				// increment the rflag
 				env4->rflag=0;
-				safePost(env4);
 			}
+			safePost(env4);
 			env2->rflag = 1;
-			safePost(env2);
-			counter2++;
 		}
+		safePost(env2);
+		counter2++;
 		// TODO instead of sleeping, we need to wake up this thread from a timer event
 
 	}
@@ -283,8 +280,8 @@ void *reader2() {
 
 void *reader3() {
 	while (is_running) {
+		safeWait(env3);
 		if (!checkFlags(env3)) {
-			safeWait(env3);
 
 			changeColor(env3);
 			printf(
@@ -292,10 +289,10 @@ void *reader3() {
 			printf("Reader3: %s\n", env3->data);
 			env3->rflag = 1;
 
-			safePost(env3);
 		}
+		safePost(env3);
+		safeWait(env4);
 		if(!checkFlags(env4)){
-			safeWait(env4);
 
 			changeColor(env4);
 			printf(
@@ -303,10 +300,9 @@ void *reader3() {
 			printf("Reader3: %s\n", env4->data);
 			env4->rflag = 1;
 
-			safePost(env4);
 			counter3++;
 		}
-
+		safePost(env4);
 	}
 }
 
