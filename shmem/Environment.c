@@ -126,3 +126,14 @@ void safeWait(Environment *env){
         exit(EXIT_FAILURE);
     };
 };
+
+void fwd(Environment *env1, Environment *env2){
+	if(env1->size == env2->size){
+		safeWait(env2);
+		memcpy(env2->data,env1->data,env1->size);
+		safePost(env2);
+	}
+	else{
+		printf("WARNING: ENVIRONMENTS NOT SAME SIZE");
+	}
+}

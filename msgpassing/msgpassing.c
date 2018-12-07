@@ -19,8 +19,11 @@
 #include <pthread.h>
 
 #include "Channel.h"
+volatile int counter1 = 0;
+volatile int counter2 = 0;
+volatile int counter3= 0;
 
-#define RUN_TIME 5
+#define RUN_TIME 27
 #define SIZE 1
 #define BUFFER_SIZE 10
 
@@ -66,7 +69,7 @@ int main()
 {
     init();
     join();
-    killer();
+//    killer();
 }
 
 void init()
@@ -183,6 +186,7 @@ void clean()
     destroyCh(ch1);
     destroyCh(ch2);
     destroyCh(ch3);
+    destroyCh(ch4);
 }
 
 void *collect1() //Communicate with reader1
@@ -244,6 +248,7 @@ void *reader1()
 		// Print Message
 		// relpy to collect1
         reply(ch1, recvid1);
+        counter1++;
 
     }
 }
@@ -259,10 +264,10 @@ void *reader2()
         //receive from collect2
         recvid2 = recv(ch2);
 
-        printf("Reader2: %s\n", ch2->recv_buffer);
-
         // make lowercase
         lower(ch2);
+        printf("Reader2: %s\n", ch2->recv_buffer);
+
 
         fwd(ch2, ch4);
 
@@ -271,6 +276,7 @@ void *reader2()
 
         // reply to Collect2
         reply(ch2, recvid2);
+        counter2++;
 
     }
 }
@@ -298,6 +304,7 @@ void *reader3()
             printf("Reader3: Changing color based on the stats of the message on channel 4!\n");
             reply(ch4, recvid4);
         }
+        counter3++;
     }
 }
 
@@ -312,9 +319,10 @@ void checkresult(int result, char *text)
 
 void *killer()
 {
+    printf("%s", WHITE);
     printf("Killed!\n");
     is_running = 0;
-    printf("%s", WHITE);
+	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d\n",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
     clean();
     exit(EXIT_SUCCESS);
 };

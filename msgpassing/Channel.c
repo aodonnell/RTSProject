@@ -126,7 +126,6 @@ int recv(Channel * ch){
 
 // copies the recv buffer to the send buffer of a different channel to forward a message
 void fwd(Channel * ch1, Channel * ch2){
-	puts("forwarding.");
      if(ch1->size == ch2->size){
           memcpy(ch2->send_buffer, ch1->recv_buffer, ch1->size);
      }else{
@@ -136,9 +135,7 @@ void fwd(Channel * ch1, Channel * ch2){
 
 // send the send buffer an a channel
 void send(Channel * ch, int conid){
-	printf("sending...\n");
     MsgSend(conid, ch->send_buffer, ch->size, ch->reply_buffer);
-    puts("sent!");
 };
 
 // reply to the last message recieved

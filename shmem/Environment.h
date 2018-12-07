@@ -58,4 +58,6 @@ void safePost(Environment *env);
 // waits for the mutex of an environment. Kills the program if this fails
 void safeWait(Environment *env);
 
+void fwd(Environment *env1,Environment *env2);
+
 #endif /* ENVIRONMENT_H_ */

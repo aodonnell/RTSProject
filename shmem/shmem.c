@@ -19,6 +19,9 @@
 #include <pthread.h>
 
 #include "Environment.h"
+volatile int counter1 = 0;
+volatile int counter2 = 0;
+volatile int counter3= 0;
 
 // TODO add control c sig handler that changes the font back to white once the program is termninated
 // TODO set an alarm to kill the threads once it expires. Maybe use a global is_running var to replace the while(1)s in the threads
@@ -43,6 +46,7 @@ pthread_t reader_t3;
 Environment *env1;
 Environment *env2;
 Environment *env3;
+Environment *env4;
 
 volatile unsigned counter;
 
@@ -76,6 +80,7 @@ void init() {
 	env1 = createEnv(ENV_SIZE);
 	env2 = createEnv(ENV_SIZE);
 	env3 = createEnv(ENV_SIZE);
+	env4 = createEnv(ENV_SIZE);
 
 	int id;
 	int result;
@@ -90,9 +95,9 @@ void init() {
 
 	// setup timer interval for 0.5 seconds
 	itime.it_interval.tv_sec = 0;
-	itime.it_interval.tv_nsec = (int) 5e6;
+	itime.it_interval.tv_nsec = (int) 5e8;
 	itime.it_value.tv_sec = 0;
-	itime.it_value.tv_nsec = (int) 5e6;
+	itime.it_value.tv_nsec = (int) 5e8;
 
 	// init event structures and pulse channel
 	chid1 = ChannelCreate(0);
@@ -182,6 +187,7 @@ void clean() {
 	destroyEnv(env1);
 	destroyEnv(env2);
 	destroyEnv(env3);
+	destroyEnv(env4);
 }
 
 void *collect1() {
@@ -202,17 +208,7 @@ void *collect1() {
 				safePost(env1);
 			}
 
-			if (checkFlags(env3) == 1) {
-				safeWait(env3);
 
-				// collect the junk data
-				junkData(env3);
-
-				// increment the rflag
-				env3->rflag++;
-
-				safePost(env3);
-			}
 		}
 	}
 }
@@ -235,28 +231,6 @@ void *collect2() {
 
 				safePost(env2);
 			}
-
-			if (checkFlags(env3) == 2) {
-				safeWait(env3);
-
-				// fill the second half with an incrementing character.
-				// This makes it more likely that every colour will appear
-				int i = 2;
-				for (i; i < env3->size; i++) {
-					env3->data[i] = fill;
-				}
-
-				if (fill < 'Z') {
-					fill++;
-				} else {
-					fill = 'A';
-				}
-
-				// set the read flag
-				env3->rflag = 0;
-
-				safePost(env3);
-			}
 		}
 	}
 }
@@ -268,11 +242,20 @@ void *reader1() {
 			safeWait(env1);
 
 			printf("Reader1: %s\n", env1->data);
+			fwd(env1,env3);
+			if (checkFlags(env3)) {
+				safeWait(env3);
+				// increment the rflag
+				env3->rflag=0;
+				safePost(env3);
+			}
+
 			env1->rflag = 1;
 
 			safePost(env1);
+			counter1++;
 		}
-		sleep(1);
+
 	}
 }
 
@@ -282,11 +265,19 @@ void *reader2() {
 			safeWait(env2);
 			lower(env2);
 			printf("Reader2: %s\n", env2->data);
+			fwd(env2,env4);
+			if (checkFlags(env4) == 1) {
+				safeWait(env4);
+				// increment the rflag
+				env4->rflag=0;
+				safePost(env4);
+			}
 			env2->rflag = 1;
 			safePost(env2);
+			counter2++;
 		}
 		// TODO instead of sleeping, we need to wake up this thread from a timer event
-		sleep(1);
+
 	}
 }
 
@@ -297,13 +288,25 @@ void *reader3() {
 
 			changeColor(env3);
 			printf(
-					"Reader3: Changing color based on the stats of the environment!\n");
+					"Reader3: Changing color based on the Collect1 of the environment!\n");
 			printf("Reader3: %s\n", env3->data);
 			env3->rflag = 1;
 
 			safePost(env3);
 		}
-		sleep(1);
+		if(!checkFlags(env4)){
+			safeWait(env4);
+
+			changeColor(env4);
+			printf(
+					"Reader3: Changing color based on the Collect2 of the environment!\n");
+			printf("Reader3: %s\n", env4->data);
+			env4->rflag = 1;
+
+			safePost(env4);
+			counter3++;
+		}
+
 	}
 }
 
@@ -315,9 +318,10 @@ void checkresult(int result, char *text) {
 }
 
 void * killer(){
+    printf("%s", WHITE);
 	printf("Killed!\n");
 	is_running = 0;
-    printf("%s", WHITE);
+	printf("Counter1 = %d, Counter2 = %d, Counter3 = %d, Total per second = %d\n",counter1,counter2,counter3,((counter1+counter2+counter3)/RUN_TIME));
 
 };
 
